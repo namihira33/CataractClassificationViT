@@ -50,7 +50,7 @@ class OCThorizontalDatasetBase(Dataset):
 
     def __getitem__(self, index):
         image_name = self.image_names[index]
-        image = Image.open(image_name).convert('RGB')
+        image = Image.open(image_name).convert('L')
         label = torch.eye(config.n_class)[self.labels[index]]
         #label = [self.labels[index]]
         #label = normal_distribution(self.labels[index])
@@ -64,6 +64,10 @@ class OCThorizontalDatasetBase(Dataset):
         return len(self.image_names)
         #return 1000
 
+    def pick_label(self, index):
+        label = torch.eye(config.n_class)[self.labels[index]]
+        return torch.Tensor(label)
+
     def get_label(self, label_base):
         pass
 
@@ -72,11 +76,12 @@ class OCThorizontalDataset(OCThorizontalDatasetBase):
     def get_label(self, label_base):
         if label_base == 1:
             return 0
-        #elif label_base == 2:
-        #    return 1
-        #elif label_base == 3:
-        #    return 1
+        elif label_base == 2:
+            return 1
+        elif label_base == 3:
+            return 1
         else:
+            #return 2
             return 1
 
 #回転断面画像のデータセット
@@ -139,7 +144,7 @@ class OCTspinDatasetBase(Dataset):
         pass
 '''
 
-
+'''
 class OCTspinDatasetBase(Dataset):
     def __init__(self, root, image_list_file,transform=None,n_per_unit=16,d_type=6):
         # まずはファイルを開いてID一覧を出力
@@ -155,6 +160,8 @@ class OCTspinDatasetBase(Dataset):
         self.images = [Image.open(os.path.join(root,item[1] + '_' + item[2] + '_' + '{:0=3}'.format(int(i)) + '.jpg')).convert('RGB') for item in item_matrix for i in range(n_per_unit) if isint(item[1]) if isint(item[d_type])]
         self.images = [self.transform(image) for image in self.images]
         self.labels = [self.get_label(int(item[d_type][0])) for item in item_matrix for i in range(n_per_unit) if isint(item[1]) if isint(item[d_type])]
+        
+
         self.item_indexes = np.array(range(len(item_matrix)*n_per_unit))
         self.transform = transform
         self.image_list_file = image_list_file
@@ -178,6 +185,63 @@ class OCTspinDatasetBase(Dataset):
         label = torch.eye(config.n_class)[self.labels[index]]
         return torch.Tensor(label)
 
+'''
+
+
+class OCTspinDatasetBase(Dataset):
+    def __init__(self, root, image_list_file,transform=None,n_per_unit=16,d_type=6):
+        # まずはファイルを開いてID一覧を出力
+        with open(image_list_file,"r") as f:
+            lines = f.readlines()
+        lines = [line.rstrip("\n") for line in lines] #右の改行文字の削除
+        item_matrix = [line.split(',') for line in lines]
+
+        self.transform = transform
+        self.images = torch.empty(0)
+
+        #画像の名前、ラベル、インデックスを記録する
+        self.image_names = [os.path.join(root,item[1] + '_' + item[2] + '_' + '{:0=3}'.format(int(0)) + '.jpg') for item in item_matrix if isint(item[1]) and isint(item[d_type]) ]
+        labels = []
+
+        #別々に扱う場合
+        for item in item_matrix:
+            spin_images = torch.empty(0)
+            if isint(item[1]) and isint(item[d_type]):
+                for i in range(n_per_unit):
+                    image_name = item[1] + '_' + item[2] + '_' + '{:0=3}'.format(int(i)) + '.jpg'
+                    subset_image = Image.open(os.path.join(root,image_name)).convert('L')
+                    if transform is not None:
+                        subset_image = self.transform(subset_image)
+                    spin_images = torch.cat((spin_images,subset_image),0)
+                spin_images = torch.reshape(spin_images,(1,n_per_unit,config.image_size,config.image_size))
+                self.images = torch.cat((self.images,spin_images),0)
+                label = self.get_label(int(item[d_type][0]))
+                print(label)
+                labels.append(label)
+
+        self.labels = labels
+        self.item_indexes = np.array(range(len(labels)))
+        self.image_list_file = image_list_file
+
+
+    def __getitem__(self, index):
+        image_name = self.image_names[index]
+        #image = Image.open(image_name).convert('L')
+        image = self.images[index]
+        label = torch.eye(config.n_class)[self.labels[index]]
+        item_index = self.item_indexes[index]
+        #if self.transform is not None:
+        #    image = self.transform(image)
+
+        return (image,torch.Tensor(label),item_index) if self.image_list_file==config.train_info_list else (image,torch.Tensor(label),image_name)
+
+    def __len__(self):
+        return len(self.labels)
+
+    def pick_label(self, index):
+        label = torch.eye(config.n_class)[self.labels[index]]
+        return torch.Tensor(label)
+
         
 
 # 症状なし:0 軽度:1 中度:2 重度:3と分類する。
@@ -185,7 +249,10 @@ class OCTspinDataset(OCTspinDatasetBase):
     def get_label(self, label_base):
         if label_base == 1:
             return 0
+        elif label_base == 2 or label_base == 3:
+            return 1
         else:
+            #return 2
             return 1
 
 def load_dataset(n_per_unit,d_type,preprocess):
@@ -193,14 +260,14 @@ def load_dataset(n_per_unit,d_type,preprocess):
         transforms.Compose([transforms.Resize(config.image_size),
                             transforms.CenterCrop(config.image_size),
                             transforms.ToTensor(),
-                            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                            transforms.Normalize((0.5, ),(0.5, )),
                             ])
     test_transform = \
         transforms.Compose([transforms.Resize(config.image_size),
                             transforms.CenterCrop(config.image_size),
                             transforms.ToTensor(),
-                            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                                                 ])
+                            transforms.Normalize((0.5, ),(0.5, )),
+                            ])
     
     dataset = {}
     if n_per_unit == 1:

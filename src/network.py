@@ -48,10 +48,24 @@ class Resnet34(nn.Module):
         return self.net(x)
 
 class Resnet18(nn.Module):
-    def __init__(self):
+    def __init__(self,n_per_unit):
         super().__init__()
         self.net = models.resnet18()
-        self.net.conv1 = nn.Conv2d(1,64,7,stride=(2,2),padding=(3,3))
+        self.net.conv1 = nn.Conv2d(n_per_unit,64,7,stride=(2,2),padding=(3,3))
+        self.net.fc = nn.Linear(in_features=512,out_features=config.n_class)
+        self.sigmoid = nn.Sigmoid()
+        self.softmax = nn.Softmax(dim=1)
+
+    def forward(self,x):
+        x = self.net(x)
+        #x = self.softmax(x)
+        return x
+
+class Resnet18_PT(nn.Module):
+    def __init__(self,n_per_unit):
+        super().__init__()
+        self.net = models.resnet18(pretrained=True)
+        self.net.conv1 = nn.Conv2d(n_per_unit,64,7,stride=(2,2),padding=(3,3))
         self.net.fc = nn.Linear(in_features=512,out_features=config.n_class)
         self.sigmoid = nn.Sigmoid()
         self.softmax = nn.Softmax(dim=1)
@@ -65,7 +79,7 @@ class ViT(nn.Module):
     def __init__(self):
         super().__init__()
         model_name = 'vit_base_patch16_224'
-        self.net = timm.create_model(model_name,num_classes=config.n_class)
+        self.net = timm.create_model(model_name,num_classes=config.n_class,in_chans=config.n_per_unit)
         #self.softmax = nn.Softmax(dim=1)
     
     def forward(self,x):
@@ -74,10 +88,10 @@ class ViT(nn.Module):
         return x
 
 class ViT_1kF(nn.Module):
-    def __init__(self):
+    def __init__(self,n_per_unit):
         super().__init__()
         model_name = 'vit_base_patch16_224'
-        self.net = timm.create_model(model_name,num_classes=config.n_class,pretrained=True)
+        self.net = timm.create_model(model_name,num_classes=config.n_class,pretrained=True,in_chans=n_per_unit)
 
         update_param_names = ['head.weight','head.bias']
 
@@ -125,13 +139,15 @@ def make_model(name,n_per_unit):
     elif name == 'Vgg19_bn':
         net = Vgg19_bn(n_per_unit)
     elif name == 'ResNet18':
-        net = Resnet18().to(device)
+        net = Resnet18(n_per_unit).to(device)
+    elif name == 'ResNet18_PT':
+        net = Resnet18_PT(n_per_unit).to(device)
     elif name == 'ResNet34':
         net = Resnet34().to(device)
     elif name == 'ViT':
         net = ViT().to(device)
     elif name == 'ViT_1k':
-        net = ViT_1kF().to(device)
+        net = ViT_1kF(n_per_unit).to(device)
     elif name == 'ViT_21k':
         net = ViT_21kF().to(device)
     elif name == 'Swin':

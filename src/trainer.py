@@ -77,10 +77,16 @@ def calc_class_count(dataset,n_class):
     #データセットからラベルの値を一つずつ取り出して、クラス数を計算する
     class_count = [0] * n_class
 
-    for i in range(len(dataset)):
-        label = int([np.argmax(dataset[i][1].detach().cpu().numpy())][0])
-        class_count[label] += 1
+    l = len(dataset)
 
+    for i in range(l):
+        if all(torch.argmax(dataset.pick_label(i)) == torch.Tensor([1])):
+            label = 1
+        elif all(torch.argmax(dataset.pick_label(i)) == torch.Tensor([2])):
+            label = 2
+        else :
+            label = 0
+        class_count[label] += 1
     #labelsを元に各クラスの数を計算する
     print(class_count)
     return class_count
@@ -138,15 +144,22 @@ class Trainer():
             self.c['n_per_unit'] = 1 if self.c['d_mode'] == 'horizontal' else 16
             self.c['type'] = TypeToIntdict[self.c['type']]
 
+            #pickleファイル、回転断面16枚と1ラベルを対応づける場合
+            #pickle_file = config.spin16to1_pkl
+
+            #pickleファイル、水平断面、回転断面16枚16ラベルを対応づける場合 ()
+            pickle_file = config.normal_pkl
+
             #訓練、検証に分けてデータ分割
-            if os.path.exists(config.normal_pkl):
-                with open(config.normal_pkl,mode="rb") as f:
+            if os.path.exists(pickle_file):
+                with open(pickle_file,mode="rb") as f:
                     self.dataset = pickle.load(f)
             else :
                 self.dataset = load_dataset(self.c['n_per_unit'],self.c['type'],self.c['preprocess'])
-                with open(config.normal_pkl,mode="wb") as f:
+                with open(pickle_file,mode="wb") as f:
                     pickle.dump(self.dataset,f)
 
+            print('data load complete')
 
             #使用モデルがViTの場合に改造する。
             #self.net = make_model(self.c['model_name'],self.c['n_per_unit'])
@@ -176,7 +189,7 @@ class Trainer():
 
                 #画像に対応したIDに変換 -> Dataloaderで読み込む。
                 learning_index,valid_index = calc_dataset_index(learning_id_index,valid_id_index,'train',self.c['n_per_unit'])
-                learning_dataset = Subset(self.dataset['train'],learning_index)
+                learning_dataset = Subset_label(self.dataset['train'],learning_index)
 
                 #訓練データの各クラス数をカウントしないといけないのでは？
                 
@@ -191,12 +204,15 @@ class Trainer():
                 if self.c['sampler'] == 'normal':
                     self.dataloaders['learning'] = DataLoader(learning_dataset,self.c['bs'],num_workers=os.cpu_count(),shuffle=True)
                 elif self.c['sampler'] == 'over':
+                    #self.dataloaders['learning'] = TripleOverSampler(learning_dataset,self.c['bs']//config.n_class)
                     self.dataloaders['learning'] = BinaryOverSampler(learning_dataset,self.c['bs']//config.n_class)
+
                 elif self.c['sampler'] == 'under':
+                    #self.dataloaders['learning'] = TripleUnderSampler(learning_dataset,self.c['bs']//config.n_class)
                     self.dataloaders['learning'] = BinaryUnderSampler(learning_dataset,self.c['bs']//config.n_class)
 
                 if not self.c['evaluate']:
-                    valid_dataset = Subset(self.dataset['train'],valid_index)
+                    valid_dataset = Subset_label(self.dataset['train'],valid_index)
                     #検証データに対するSamplerは普通のを採用すればいいから実装する必要がない
                     self.dataloaders['valid'] = DataLoader(valid_dataset,self.c['bs'],
                     shuffle=True,num_workers=os.cpu_count())
@@ -304,10 +320,10 @@ class Trainer():
             #labels_はOne-hot表現じゃないようにする
             labels_ = torch.max(labels_,1)[1]
 
-            #Samplerを使うときの処理
+            #Samplerを使うときの処理 2class
             #if phase == 'learning' and ((self.c['sampler'] == 'over') or (self.c['sampler'] == 'under')):
             #    inputs_ = inputs_.unsqueeze(1)
-            #labels_ = labels_.unsqueeze(1)
+            #   labels_ = labels_.unsqueeze(1)
 
 
             self.optimizer.zero_grad()
@@ -318,12 +334,13 @@ class Trainer():
 #                    model_name = 'facebook/deit-base-distilled-patch16-224'
 #                    feature_extractor = DeiTFeatureExtractor.from_pretrained(model_name)
  #                   inputs_ = feature_extractor(images=inputs_,return_tensor='pt')
-
-
                 outputs_ = self.net(inputs_).to(device)
 
                 #outputs__ = outputs_.unsqueeze(1)
-                loss = self.criterion(outputs_, labels_.long())
+                if phase =='learning':
+                    loss = self.criterion(outputs_, labels_)
+                elif phase =='valid':
+                    loss = self.criterion(outputs_,labels_)
                 total_loss += loss.item()
 
                 if phase == 'learning':
@@ -331,7 +348,7 @@ class Trainer():
                     self.optimizer.step()
 
             softmax = nn.Softmax(dim=1)
-            ouputs_ = softmax(outputs_)
+            outputs_ = softmax(outputs_)
 
             preds += [outputs_.detach().cpu().numpy()]
             labels += [labels_.detach().cpu().numpy()]
@@ -342,8 +359,14 @@ class Trainer():
 
         pr_auc = macro_pr_auc(labels,preds,config.n_class)
 
+        #print(labels,preds)
+
+        #labels = np.argmax(labels,axis=1)
+
         try:
-            roc_auc = roc_auc_score(labels, preds[:,1])
+            #roc_auc = roc_auc_score(labels,preds,multi_class='ovr',average='macro')
+            roc_auc = roc_auc_score(labels,preds[:,1])
+            
         except:
             roc_auc = 0
 

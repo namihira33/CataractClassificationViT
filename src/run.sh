@@ -2,17 +2,76 @@
 
 for sampler in normal
     do
-        for gamma in 0 0.5
+        for gamma in 0
             do
-                for beta in 0 -1 0.99 0.999
+                for beta in 0
                 do
-                    for lr in 5e-5 1e-4 5e-4
-                    do
-                    python3 ./src/run.py cv=1 evaluate=0 mode=spin type=C preprocess=Add_BlackRects sampler=$sampler gamma=$gamma beta=$beta  lr=$lr epoch=30
+                   for lr in 5e-4
+                   do
+                    python3 ./src/run.py cv=0 evaluate=1 mode=spin type=N preprocess=Add_BlackRects sampler=$sampler gamma=$gamma beta=$beta  lr=$lr epoch=42
                     done
                 done
             done
     done
+
+for sampler in normal
+    do
+        for gamma in 1
+            do
+                for beta in 0.99
+                do
+                   for lr in 1e-4
+                   do
+                    python3 ./src/run.py cv=0 evaluate=1 mode=spin type=N preprocess=Add_BlackRects sampler=$sampler gamma=$gamma beta=$beta  lr=$lr epoch=48
+                    done
+                done
+            done
+    done
+
+#for sampler in normal
+#    do
+#        for gamma in 0
+#            do
+#                for beta in 0.999
+#               do
+#                   for lr in 5e-4
+#                   do
+#                    python3 ./src/run.py cv=0 evaluate=1 mode=spin type=C preprocess=Add_BlackRects sampler=$sampler gamma=$gamma beta=$beta  lr=$lr epoch=38
+#                    done
+#                done
+#            done
+#    done
+
+
+#for sampler in over
+#    do
+#        for gamma in 0
+#           do
+#                for beta in 0
+#                do
+#                  for lr in 5e-4
+#                  do
+#                    python3 ./src/run.py cv=0 evaluate=1 mode=spin type=N preprocess=Add_BlackRects sampler=$sampler gamma=$gamma beta=$beta  lr=$lr epoch=25
+#                    done
+#                done
+#            done
+#    done
+
+
+#for sampler in normal
+#    do
+#        for gamma in 0
+#            do
+#                for beta in 0
+#                do
+#                    for lr in 5e-4
+#                    do
+#                    python3 ./src/run.py cv=0 evaluate=1 mode=horizontal type=P preprocess=Add_BlackRects sampler=$sampler gamma=$gamma beta=$beta  lr=$lr epoch=2
+#                    done
+#                done
+#            done
+#    done
+#
 
 #for preprocess in Add_BlackRects
 #do
@@ -78,8 +137,6 @@ for sampler in normal
 #python3 ./src/run.py cv=0 evaluate=1 mode=horizontal type=P preprocess=Add_BlackRects sampler=normal gamma=0 beta=0 lr=0.00005 epoch=20
 #python3 ./src/run.py cv=0 evaluate=1 mode=horizontal type=P preprocess=Add_BlackRects sampler=under gamma=0.5 beta=0.99 lr=0.0005 epoch=42
 #python3 ./src/run.py cv=0 evaluate=1 mode=horizontal type=P preprocess=Add_BlackRects sampler=normal gamma=0 beta=0 lr=0.00005 epoch=42
-
-
 #python3 ./src/run.py cv=0 evaluate=1 mode=horizontal type=C preprocess=Add_BlackRects sampler=normal gamma=0 beta=0 lr=0.0001 epoch=77
 #python3 ./src/run.py cv=0 evaluate=1 mode=horizontal type=C preprocess=Add_BlackRects sampler=over gamma=0 beta=-1 lr=0.0001 epoch=65
 #python3 ./src/run.py cv=1 evaluate=0 mode=horizontal type=C preprocess=Add_BlackRects sampler=over gamma=2.0 beta=-1 lr=0.0005 epoch=100
